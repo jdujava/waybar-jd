@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -55,6 +56,7 @@ Item::Item(const std::string& bn, const std::string& op, const Json::Value& conf
       icon_theme(Gtk::IconTheme::create()),
       bar_(bar),
       window_activations_(config["mango-window-activate"]),
+      icon_scales_(config["icon-scales"]),
       on_ready_(on_ready),
       on_invalidate_(on_invalidate),
       on_updated_(on_updated),
@@ -62,6 +64,9 @@ Item::Item(const std::string& bn, const std::string& op, const Json::Value& conf
       orders_(orders) {
   if (config["icon-size"].isUInt()) {
     icon_size = config["icon-size"].asUInt();
+  }
+  if (config["icon-theme-size"].isUInt()) {
+    icon_theme_size_ = config["icon-theme-size"].asUInt();
   }
   if (config["smooth-scrolling-threshold"].isNumeric()) {
     scroll_threshold_ = config["smooth-scrolling-threshold"].asDouble();
@@ -579,8 +584,9 @@ Glib::RefPtr<Gdk::Pixbuf> Item::overlayPixbufs(const Glib::RefPtr<Gdk::Pixbuf>& 
 
 Glib::RefPtr<Gdk::Pixbuf> Item::getIconByName(const std::string& name, int request_size) {
   if (!icon_theme_path.empty()) {
-    auto icon_info = icon_theme->lookup_icon(name.c_str(), request_size,
-                                             Gtk::IconLookupFlags::ICON_LOOKUP_FORCE_SIZE);
+    auto icon_info = DefaultGtkIconThemeWrapper::lookup_icon(
+        icon_theme, name.c_str(), request_size, Gtk::IconLookupFlags::ICON_LOOKUP_FORCE_SIZE,
+        icon_theme_size_);
     if (icon_info) {
       bool is_sym = false;
       return icon_info.load_symbolic(event_box.get_style_context(), is_sym);
@@ -588,12 +594,17 @@ Glib::RefPtr<Gdk::Pixbuf> Item::getIconByName(const std::string& name, int reque
   }
   return DefaultGtkIconThemeWrapper::load_icon(name.c_str(), request_size,
                                                Gtk::IconLookupFlags::ICON_LOOKUP_FORCE_SIZE,
-                                               event_box.get_style_context());
+                                               event_box.get_style_context(), icon_theme_size_);
 }
 
 double Item::getScaledIconSize() {
-  // apply the scale factor from the Gtk window to the requested icon size
-  return icon_size * image.get_scale_factor();
+  double scale = 1;
+  if (icon_scales_.isObject() && icon_scales_[id].isNumeric()) {
+    const double configured = icon_scales_[id].asDouble();
+    if (std::isfinite(configured) && configured > 0 && configured <= 4) scale = configured;
+  }
+  // Round in logical pixels so an item's size is consistent across output scales.
+  return std::max(1.0, std::round(icon_size * scale)) * image.get_scale_factor();
 }
 
 void Item::onMenuDestroyed(Item* self, GObject* old_menu_pointer) {
