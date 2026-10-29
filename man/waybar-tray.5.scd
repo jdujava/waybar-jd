@@ -16,6 +16,22 @@ Addressed by *tray*
 	typeof: integer ++
 	Defines the size of the tray icons.
 
+*icon-scales*: ++
+	typeof: object ++
+	Per-application size multipliers keyed by StatusNotifierItem Id. ++
+	For example, `"icon-scales": {"blueman": 0.9, "nm-applet": 0.9}` makes those icons smaller. ++
+	Other items use 1. Values must be greater than 0 and at most 4; invalid values use 1. ++
+	The result is rounded to logical pixels before applying the output scale. ++
+	Dynamic icon names and badges are preserved. ++
+	Set *icon-theme-size* to retain a fixed artwork variant.
+
+*icon-theme-size*: ++
+	typeof: integer ++
+	default: 0 ++
+	Select named theme icons at this nominal size, then render at *icon-size*. ++
+	Useful when a theme's larger panel variants add padding instead of larger artwork. ++
+	0 follows *icon-size*. App-provided pixmaps and direct image files are unaffected.
+
 *show-passive-items*: ++
 	typeof: bool ++
 	default: false ++

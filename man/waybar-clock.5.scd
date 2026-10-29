@@ -112,6 +112,16 @@ $XDG_CONFIG_HOME/waybar/config ++
 :[ array
 :[
 :[ The actions corresponding to the buttons of the menu.
+|[ *calendar-popup*
+:[ bool
+:[ false
+:[ Show the calendar in a nonmodal popup instead of a tooltip. Requires an enabled
+   tooltip whose *tooltip-format* contains *{calendar}*. Existing calendar actions
+   update the popup while it remains visible.
+|[ *calendar-hover-delay*
+:[ unsigned integer
+:[ 500
+:[ Delay in milliseconds before showing *calendar-popup* when hovering over the clock.
 |[ *expand*:
 :[ bool
 :[ false
@@ -206,6 +216,12 @@ View all valid format options in *strftime(3)* or have a look https://en.cpprefe
 :[ Switch to the previous calendar month/year
 |[ *shift_reset*
 :[ Reset the calendar shift back to the current month/year
+|[ *calendar_toggle*
+:[ Pin the calendar popup open immediately, or close and unpin it if already pinned.
+   A pinned popup stays open when the pointer leaves or another window is clicked.
+   Clicking the calendar itself closes it on button release; scrolling does not
+   dismiss it. Requires *calendar-popup*. For example, set
+   *actions: {"on-click": "calendar_toggle"}*.
 |[ *exec <cmd>*
 :[ Execute the specified command
 

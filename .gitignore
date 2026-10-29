@@ -53,3 +53,10 @@ result-*
 .ccls-cache
 _codeql_detected_source_root
 heaptrack*
+
+# Local Arch package outputs
+/packaging/waybar/
+/packaging/src/
+/packaging/pkg/
+/packaging/*.pkg.tar.*
+/packaging/*.src.tar.*
