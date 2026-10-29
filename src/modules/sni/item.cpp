@@ -15,6 +15,9 @@
 #include "gdk/gdk.h"
 #include "modules/sni/host.hpp"
 #include "modules/sni/icon_manager.hpp"
+#ifdef HAVE_MANGO
+#include "modules/mango/backend.hpp"
+#endif
 #include "util/format.hpp"  // IWYU pragma: keep
 #include "util/gtk_icon.hpp"
 
@@ -51,6 +54,7 @@ Item::Item(const std::string& bn, const std::string& op, const Json::Value& conf
       effective_icon_size(0),
       icon_theme(Gtk::IconTheme::create()),
       bar_(bar),
+      window_activations_(config["mango-window-activate"]),
       on_ready_(on_ready),
       on_invalidate_(on_invalidate),
       on_updated_(on_updated),
@@ -72,8 +76,14 @@ Item::Item(const std::string& bn, const std::string& op, const Json::Value& conf
   auto& window = const_cast<Bar&>(bar).window;
   window.signal_configure_event().connect_notify(sigc::mem_fun(*this, &Item::onConfigure));
   event_box.add(image);
-  event_box.add_events(Gdk::BUTTON_PRESS_MASK | Gdk::SCROLL_MASK | Gdk::SMOOTH_SCROLL_MASK);
+  event_box.add_events(Gdk::BUTTON_PRESS_MASK | Gdk::BUTTON_RELEASE_MASK |
+                       Gdk::SCROLL_MASK | Gdk::SMOOTH_SCROLL_MASK);
   event_box.signal_button_press_event().connect(sigc::mem_fun(*this, &Item::handleClick));
+  event_box.signal_button_release_event().connect(sigc::mem_fun(*this, &Item::handleClick));
+  event_box.signal_grab_broken_event().connect([this](GdkEventGrabBroken*) {
+    pressed_button_ = 0;
+    return false;
+  });
   event_box.signal_scroll_event().connect(sigc::mem_fun(*this, &Item::handleScroll));
   event_box.signal_enter_notify_event().connect(sigc::mem_fun(*this, &Item::handleMouseEnter));
   event_box.signal_leave_notify_event().connect(sigc::mem_fun(*this, &Item::handleMouseLeave));
@@ -118,7 +128,12 @@ bool Item::handleMouseLeave(GdkEventCrossing* const& e) {
   return false;
 }
 
-void Item::onConfigure(GdkEventConfigure* ev) { this->updateImage(); }
+void Item::onConfigure(GdkEventConfigure* ev) {
+  const auto window = bar_.window.get_window();
+  // Properties arrive asynchronously; do not draw an uninitialized icon.
+  // Popup configure events also reach the bar, but cannot resize tray icons.
+  if (ready_ && window && ev->window == window->gobj()) this->updateImage();
+}
 
 void Item::proxyReady(Glib::RefPtr<Gio::AsyncResult>& result) {
   try {
@@ -624,6 +639,53 @@ bool Item::handleClick(GdkEventButton* const& ev) {
   if (!proxy_) {
     return false;
   }
+  const bool inside = ev->x >= 0 && ev->y >= 0 && ev->x < event_box.get_allocated_width() &&
+                      ev->y < event_box.get_allocated_height();
+  if (ev->type == GDK_BUTTON_PRESS) {
+    // Recover a stale pointer grab rather than accepting another widget's click.
+    if (!inside) {
+      pressed_button_ = 0;
+      if (auto* seat = gdk_event_get_seat(reinterpret_cast<GdkEvent*>(ev))) gdk_seat_ungrab(seat);
+      return false;
+    }
+    if ((ev->button == 1 && !item_is_menu) || ev->button == 2) {
+      // Finish the input gesture before activation can unmap or refocus windows.
+      pressed_button_ = ev->button;
+      return true;
+    }
+  } else if (ev->type == GDK_BUTTON_RELEASE) {
+    if (pressed_button_ != ev->button) return false;
+    pressed_button_ = 0;
+    // Releasing a dragged-out click must not activate the tray item.
+    if (!inside) return true;
+  } else {
+    // GTK emits extra double/triple-press events after the ordinary press.
+    return true;
+  }
+#ifdef HAVE_MANGO
+  // Tray activation carries no trusted Wayland input token. Visit an existing
+  // unfocused window directly; let the app handle its own hide/show otherwise.
+  if (ev->button == 1 && window_activations_[id].isString()) {
+    try {
+      Json::Value request;
+      request["command"] = "get all-clients";
+      const auto clients = mango::IPC::send(request)["clients"];
+      const Json::Value* target = nullptr;
+      for (const auto& client : clients) {
+        if (client["appid"] != window_activations_[id]) continue;
+        if (client["is_focused"].asBool()) { target = nullptr; break; }
+        if (!target) target = &client;
+      }
+      if (target) {
+        request["command"] = "dispatch focusid,client," + std::to_string((*target)["id"].asUInt64());
+        mango::IPC::sendAsync(request);
+        return true;
+      }
+    } catch (const std::exception& error) {
+      spdlog::warn("Tray window activation for {}: {}", id, error.what());
+    }
+  }
+#endif
   auto parameters = Glib::VariantContainerBase::create_tuple(
       {Glib::Variant<int>::create(ev->x_root + bar_.x_global),
        Glib::Variant<int>::create(ev->y_root + bar_.y_global)});

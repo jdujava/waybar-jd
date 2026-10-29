@@ -15,14 +15,10 @@ class Watcher {
 
   using singleton = std::shared_ptr<Watcher>;
   static singleton getInstance() {
-    static std::weak_ptr<Watcher> weak;
-
-    std::shared_ptr<Watcher> strong = weak.lock();
-    if (!strong) {
-      strong = std::shared_ptr<Watcher>(new Watcher());
-      weak = strong;
-    }
-    return strong;
+    // Keep app registrations across SIGUSR2/widget rebuilds. The bus name and
+    // cached registry end with this process, rather than with the last tray.
+    static singleton instance{new Watcher()};
+    return instance;
   }
 
  private:

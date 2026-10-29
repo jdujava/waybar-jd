@@ -113,9 +113,11 @@ class Item : public sigc::trackable {
   // hidden via config
   bool is_hidden_ = false;
   bool ready_ = false;
+  guint pressed_button_ = 0;
   Glib::ustring status_ = "active";
 
   const Bar& bar_;
+  const Json::Value window_activations_;
   const std::function<void(Item&)> on_ready_;
   const std::function<void(Item&)> on_invalidate_;
   const std::function<void()> on_updated_;
