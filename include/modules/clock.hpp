@@ -3,6 +3,7 @@
 #include "ALabel.hpp"
 #include "util/date.hpp"
 #include "util/sleeper_thread.hpp"
+#include <gtkmm/popover.h>
 
 namespace waybar::modules {
 
@@ -17,7 +18,10 @@ enum class WeekNumbering { LOCALE, ISO, MONDAY, SUNDAY };
 class Clock final : public ALabel {
  public:
   Clock(const std::string&, const Json::Value&);
-  virtual ~Clock() = default;
+  ~Clock() override {
+    calendar_delay_.disconnect();
+    for (auto& connection : calendar_connections_) connection.disconnect();
+  }
   auto update() -> void override;
   auto doAction(const std::string&) -> void override;
 
@@ -26,8 +30,12 @@ class Clock final : public ALabel {
   // tooltip
   const std::string m_tlpFmt_;
   std::string m_tlpText_{""};                 // tooltip text to print
-  const Glib::RefPtr<Gtk::Label> m_tooltip_;  // tooltip as a separate Gtk::Label
+  Gtk::Label m_tooltip_;                    // owned calendar/tooltip content
   bool query_tlp_cb(int, int, bool, const Glib::RefPtr<Gtk::Tooltip>& tooltip);
+  std::unique_ptr<Gtk::Popover> calendar_popup_;
+  bool calendar_pinned_{false};
+  sigc::connection calendar_delay_;
+  std::vector<sigc::connection> calendar_connections_;
   // Calendar
   const bool cldInTooltip_;  // calendar in tooltip
   /*
@@ -80,6 +88,7 @@ class Clock final : public ALabel {
   void cldShift_up();
   void cldShift_down();
   void cldShift_reset();
+  void calendarToggle();
   void tz_up();
   void tz_down();
   void action_exec(const std::string& action);
@@ -89,6 +98,7 @@ class Clock final : public ALabel {
       {"shift_up", &waybar::modules::Clock::cldShift_up},
       {"shift_down", &waybar::modules::Clock::cldShift_down},
       {"shift_reset", &waybar::modules::Clock::cldShift_reset},
+      {"calendar_toggle", &waybar::modules::Clock::calendarToggle},
       {"tz_up", &waybar::modules::Clock::tz_up},
       {"tz_down", &waybar::modules::Clock::tz_down}};
   static inline std::map<const std::string,

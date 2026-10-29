@@ -8,6 +8,7 @@
 #include <gtkmm/eventbox.h>
 #include <json/json.h>
 
+#include <chrono>
 #include <string>
 #include <utility>
 
@@ -112,6 +113,8 @@ class AModule : public IModule {
   bool hasUserEvents_;
   gdouble distance_scrolled_y_;
   gdouble distance_scrolled_x_;
+  std::chrono::steady_clock::time_point last_scroll_{};
+  bool scroll_handled_{false};
   sigc::connection cursor_timeout_conn_;
   static const inline std::map<std::pair<uint, GdkEventType>, std::string> eventMap_{
       {std::make_pair(1, GdkEventType::GDK_BUTTON_PRESS), "on-click"},

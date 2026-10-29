@@ -793,6 +793,10 @@ auto waybar::Bar::setupWidgets() -> void {
 }
 
 void waybar::Bar::onConfigure(GdkEventConfigure* ev) {
+  // GTK forwards native popover configure events to its containing window.
+  // Their dimensions belong to the popup, not to the bar or its global offset.
+  const auto gdk_window = window.get_window();
+  if (!gdk_window || ev->window != gdk_window->gobj()) return;
   /*
    * GTK wants new size for the window.
    * Actual resizing and management of the exclusve zone is handled within the gtk-layer-shell

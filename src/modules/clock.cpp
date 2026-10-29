@@ -21,7 +21,6 @@ waybar::modules::Clock::Clock(const std::string& id, const Json::Value& config)
     : ALabel(config, "clock", id, "{:%H:%M}", 60, false, false, true),
       m_locale_{std::locale(config_["locale"].isString() ? config_["locale"].asString() : "")},
       m_tlpFmt_{(config_["tooltip-format"].isString()) ? config_["tooltip-format"].asString() : ""},
-      m_tooltip_{new Gtk::Label()},
       cldInTooltip_{m_tlpFmt_.find("{" + kCldPlaceholder + "}") != std::string::npos},
       cldYearShift_{January / 1 / 1900},
       cldMonShift_{year(1900) / January},
@@ -153,14 +152,59 @@ waybar::modules::Clock::Clock(const std::string& id, const Json::Value& config)
     if (config_[kCldPlaceholder]["on-scroll"].isInt()) {
       cldShift_ = config_[kCldPlaceholder]["on-scroll"].asInt();
       event_box_.add_events(Gdk::LEAVE_NOTIFY_MASK);
-      event_box_.signal_leave_notify_event().connect([this](GdkEventCrossing*) {
-        cldCurrShift_ = months{0};
+      calendar_connections_.push_back(event_box_.signal_leave_notify_event().connect([this](GdkEventCrossing*) {
+        if (!calendar_pinned_) cldCurrShift_ = months{0};
         return false;
-      });
+      }));
     }
   }
 
-  if (tooltipEnabled()) {
+  if (tooltipEnabled() && cldInTooltip_ && config_["calendar-popup"].asBool()) {
+    // GTK tooltips dismiss themselves on scroll. A nonmodal native popover
+    // keeps the calendar visible while its existing label updates in place.
+    label_.set_has_tooltip(false);
+    calendar_popup_ = std::make_unique<Gtk::Popover>(label_);
+    calendar_popup_->set_modal(false);
+    calendar_popup_->set_constrain_to(Gtk::POPOVER_CONSTRAINT_NONE);
+    calendar_popup_->set_position(Gtk::POS_BOTTOM);
+    calendar_popup_->get_style_context()->add_class("calendar-popup");
+    calendar_popup_->add(m_tooltip_);
+    calendar_popup_->add_events(Gdk::BUTTON_PRESS_MASK | Gdk::BUTTON_RELEASE_MASK);
+    calendar_connections_.push_back(calendar_popup_->signal_button_press_event().connect([this](GdkEventButton*) {
+      calendar_delay_.disconnect();
+      return true;
+    }, false));
+    calendar_connections_.push_back(calendar_popup_->signal_button_release_event().connect([this](GdkEventButton*) {
+      // Keep the popup mapped through the press so the click cannot reach the window below.
+      calendar_delay_.disconnect();
+      calendar_pinned_ = false;
+      calendar_popup_->hide();
+      return true;
+    }, false));
+    event_box_.add_events(Gdk::ENTER_NOTIFY_MASK | Gdk::LEAVE_NOTIFY_MASK);
+    calendar_connections_.push_back(event_box_.signal_enter_notify_event().connect([this](GdkEventCrossing*) {
+      calendar_delay_.disconnect();
+      if (calendar_pinned_) return false;
+      calendar_delay_ = Glib::signal_timeout().connect([this] {
+        if (event_box_.get_mapped() && !calendar_pinned_) {
+          update();
+          calendar_popup_->show_all();
+        }
+        return false;
+      }, config_["calendar-hover-delay"].isUInt() ? config_["calendar-hover-delay"].asUInt() : 500);
+      return false;
+    }));
+    calendar_connections_.push_back(event_box_.signal_leave_notify_event().connect([this](GdkEventCrossing*) {
+      calendar_delay_.disconnect();
+      if (!calendar_pinned_) calendar_popup_->hide();
+      return false;
+    }));
+    calendar_connections_.push_back(event_box_.signal_unmap().connect([this] {
+      calendar_delay_.disconnect();
+      calendar_pinned_ = false;
+      calendar_popup_->hide();
+    }));
+  } else if (tooltipEnabled()) {
     label_.set_has_tooltip(true);
     label_.signal_query_tooltip().connect(sigc::mem_fun(*this, &Clock::query_tlp_cb));
   }
@@ -173,7 +217,7 @@ waybar::modules::Clock::Clock(const std::string& id, const Json::Value& config)
 
 bool waybar::modules::Clock::query_tlp_cb(int, int, bool,
                                           const Glib::RefPtr<Gtk::Tooltip>& tooltip) {
-  tooltip->set_custom(*m_tooltip_.get());
+  tooltip->set_custom(m_tooltip_);
   return true;
 }
 
@@ -284,8 +328,8 @@ auto waybar::modules::Clock::update() -> void {
       }
     }
 
-    m_tooltip_->set_markup(m_tlpText_);
-    label_.trigger_tooltip_query();
+    m_tooltip_.set_markup(m_tlpText_);
+    if (!calendar_popup_) label_.trigger_tooltip_query();
   }
 
   ALabel::update();
@@ -614,6 +658,17 @@ void waybar::modules::Clock::cldShift_down() {
   cldCurrShift_ -= (months)((cldMode_ == CldMode::YEAR) ? 12 : 1) * cldShift_;
 }
 void waybar::modules::Clock::cldShift_reset() { cldCurrShift_ = (months)0; }
+void waybar::modules::Clock::calendarToggle() {
+  if (!calendar_popup_) return;
+  calendar_delay_.disconnect();
+  calendar_pinned_ = !calendar_pinned_;
+  if (calendar_pinned_) {
+    update();
+    calendar_popup_->show_all();
+  } else {
+    calendar_popup_->hide();
+  }
+}
 void waybar::modules::Clock::tz_up() {
   const auto tzSize{tzList_.size()};
   if (tzSize == 1) return;

@@ -336,6 +336,29 @@ bool AModule::handleScroll(GdkEventScroll* e) {
   else if (dir == SCROLL_DIR::RIGHT)
     eventName = "on-scroll-right";
 
+  // Optional quiet-period filter: one action for a continuous wheel/touchpad
+  // gesture. Extend the period even for sub-threshold or horizontal events,
+  // but only consume the gesture when there is a configured action.
+  if (config_["scroll-debounce"].isUInt() && config_["scroll-debounce"].asUInt() > 0) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto quiet = std::chrono::milliseconds(config_["scroll-debounce"].asUInt());
+    scroll_handled_ = scroll_handled_ && now - last_scroll_ < quiet;
+    last_scroll_ = now;
+    if (scroll_handled_ || eventName.empty()) return true;
+    scroll_handled_ = eventActionMap_.contains(eventName) || config_[eventName].isString();
+  } else if (config_["scroll-throttle"].isUInt() && config_["scroll-throttle"].asUInt() > 0) {
+    // Repeat during a continuous gesture. Ignored events do not postpone the
+    // next action: last_scroll_ records accepted actions in this mode.
+    if (eventName.empty() ||
+        !(eventActionMap_.contains(eventName) || config_[eventName].isString()))
+      return true;
+    const auto now = std::chrono::steady_clock::now();
+    const auto interval = std::chrono::milliseconds(config_["scroll-throttle"].asUInt());
+    if (scroll_handled_ && now - last_scroll_ < interval) return true;
+    last_scroll_ = now;
+    scroll_handled_ = true;
+  }
+
   // First call module actions
   this->AModule::doAction(eventName);
   // Second call user scripts
