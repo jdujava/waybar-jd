@@ -151,6 +151,11 @@ waybar::Bar::Bar(struct waybar_output* w_output, const Json::Value& w_config)
       center_(Gtk::ORIENTATION_HORIZONTAL, 0),
       right_(Gtk::ORIENTATION_HORIZONTAL, 0),
       box_(Gtk::ORIENTATION_HORIZONTAL, 0) {
+  if (config["font-hinting"] == "full") {
+    auto settings = Gtk::Settings::get_default();
+    settings->property_gtk_xft_hinting() = 1;
+    settings->property_gtk_xft_hintstyle() = "hintfull";
+  }
   window.set_title("waybar");
   window.set_name("waybar");
   window.set_decorated(false);
@@ -333,6 +338,7 @@ waybar::Bar::Bar(struct waybar_output* w_output, const Json::Value& w_config)
 
   setupWidgets();
   window.show_all();
+  if (config["true-hide"].asBool() && !configured_modes.at(last_mode_).visible) window.hide();
 
   /*
    * If gtk-layer-shell's synchronous wait for the initial configure timed out, show_all() can
@@ -420,6 +426,11 @@ void waybar::Bar::setMode(const struct bar_mode& mode) {
     window.get_style_context()->add_class("hidden");
     window.set_opacity(0);
   }
+  // Unmap instead of leaving an invisible layer surface in Mango's scene.
+  // Showing the GTK window recreates the layer surface and exclusive zone.
+  // Initial mapping must wait until modules and map handlers have been added.
+  if (config["true-hide"].asBool() && window.get_realized())
+    window.set_visible(mode.visible);
   /*
    * All the changes above require `wl_surface_commit`.
    * gtk-layer-shell schedules a commit on the next frame event in GTK, but this could fail in

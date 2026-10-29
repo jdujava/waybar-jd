@@ -41,6 +41,9 @@ ALabel::ALabel(const Json::Value& config, const std::string& name, const std::st
     label_.get_style_context()->add_class(id);
   }
   label_.get_style_context()->add_class(MODULE_CLASS);
+  if (config_["icon-slot-width"].isInt()) {
+    label_.configureIcon(config_["icon-slot-width"].asInt(), config_["icon-offset-y"].asDouble());
+  }
   event_box_.add(label_);
   if (tooltipEnabled()) {
     // Keep dynamic tooltip contents out of GtkWidget's tooltip-markup property.

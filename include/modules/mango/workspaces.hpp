@@ -25,6 +25,8 @@ class Workspaces : public AModule, public EventHandler {
 
   Gtk::Button& addButton(uint64_t idx);
   void updateButtonState(Gtk::Button& button, const Json::Value& tag, const Json::Value& monitor);
+  bool drawClientIndicators(const Cairo::RefPtr<Cairo::Context>& cr, Gtk::Button& button,
+                            uint64_t idx);
   std::string getIcon(const std::string& value, const Json::Value& tag);
   bool handleButtonClick(GdkEventButton* event, uint64_t idx, bool isOverview);
 
@@ -33,6 +35,8 @@ class Workspaces : public AModule, public EventHandler {
 
   std::unordered_map<uint64_t, Gtk::Button> buttons_;
   std::unordered_set<uint64_t> tag_filter_;
+  // Zero-based focus index follows Mango's layout order, rather than focus history.
+  std::unordered_map<uint64_t, std::pair<int, int>> client_indicators_;
   Gtk::Button* overview_button_ = nullptr;
 
   std::string on_click_left_;

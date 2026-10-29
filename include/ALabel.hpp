@@ -12,7 +12,7 @@
 #include <utility>
 
 #include "AModule.hpp"
-#include "util/fit_label.hpp"
+#include "util/fixed_icon.hpp"
 
 namespace waybar {
 
@@ -27,7 +27,7 @@ class ALabel : public AModule {
   virtual std::string getIcon(uint16_t, const std::vector<std::string>& alts, uint16_t max = 0);
 
  protected:
-  util::FitLabel label_;
+  util::FixedIconLabel label_;
   std::string format_;
   const std::chrono::milliseconds interval_;
   bool alt_ = false;

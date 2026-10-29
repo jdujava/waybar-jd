@@ -23,10 +23,12 @@ void Window::doUpdate() {
 
   // judge whether to hide: active_client is null or title field is null
   if (client.isNull() || !client.isObject() || client["title"].isNull()) {
-    event_box_.hide();
-    label_.hide();
+    event_box_.set_visible(config_["show-empty"].asBool());
+    label_.set_visible(config_["show-empty"].asBool());
+    setLabelMarkup("");
     updateAppIconName("", "");
     setClass("empty", true);
+    setClass("floating", false);
     if (!oldAppId_.empty()) setClass(oldAppId_, false);
     oldAppId_.clear();
     return;
@@ -36,19 +38,23 @@ void Window::doUpdate() {
   event_box_.show();
   label_.show();
   setClass("empty", false);
+  const bool floating = client["is_floating"].asBool();
+  setClass("floating", floating);
 
   std::string title = client["title"].asString();
   std::string appid = client["appid"].asString();
   std::string sanitized_title = waybar::util::sanitize_string(title);
   std::string sanitized_appid = waybar::util::sanitize_string(appid);
 
-  label_.set_markup(waybar::util::rewriteString(
-      fmt::format(fmt::runtime(format_), fmt::arg("title", sanitized_title),
+  setLabelMarkup(waybar::util::rewriteString(
+      fmt::format(fmt::runtime(floating && config_["format-floating"].isString()
+                                  ? config_["format-floating"].asString() : format_),
+                  fmt::arg("title", sanitized_title),
                   fmt::arg("app_id", sanitized_appid)),
       config_["rewrite"]));
 
   updateAppIconName(appid, "");
-  if (tooltipEnabled()) label_.set_tooltip_markup(sanitized_title);
+  if (tooltipEnabled()) setTooltipMarkup(sanitized_title);
 
   // Solo judgment
   bool solo = false;

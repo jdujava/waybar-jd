@@ -16,7 +16,11 @@ void Layout::onEvent(const Json::Value& ev) { dp.emit(); }
 void Layout::doUpdate() {
   std::lock_guard<std::mutex> lock(mutex_);
 
-  std::string symbol = IPC::getInstance().getLayoutSymbolForMonitor(bar_.output->name);
+  const auto monitor = IPC::getInstance().getMonitor(bar_.output->name);
+  std::string symbol = monitor["layout_symbol"].asString();
+  // Overview keeps the underlying tag's layout symbol in Mango's IPC state.
+  const auto& tags = monitor["active_tags"];
+  if (tags.isArray() && tags.size() == 1 && tags[0].asUInt() == 0) symbol = "OVERVIEW";
 
   if (symbol.empty()) {
     label_.hide();
@@ -41,7 +45,7 @@ void Layout::doUpdate() {
 
   if (!text.empty()) {
     label_.show();
-    label_.set_markup(text);
+    setLabelMarkup(text);
   } else {
     label_.hide();
   }
@@ -50,6 +54,18 @@ void Layout::doUpdate() {
 void Layout::update() {
   doUpdate();
   ALabel::update();
+}
+
+void Layout::doAction(const std::string& action) {
+  Json::Value request;
+  if (action == "cycle") {
+    request["command"] = "dispatch switch_layout";
+  } else if (action == "toggle-floating") {
+    request["command"] = "dispatch togglefloating";
+  } else {
+    return;
+  }
+  IPC::sendAsync(request);
 }
 
 }  // namespace waybar::modules::mango

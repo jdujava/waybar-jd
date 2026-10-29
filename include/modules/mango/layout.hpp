@@ -14,6 +14,7 @@ class Layout : public ALabel, public EventHandler {
   Layout(const std::string&, const Bar&, const Json::Value&);
   ~Layout() override;
   void update() override;
+  void doAction(const std::string& action) override;
 
  private:
   void onEvent(const Json::Value& ev) override;

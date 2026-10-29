@@ -34,6 +34,9 @@ class FitLabel : public Gtk::Label {
   }
 
  protected:
+  // Derived labels that remove font attributes must discard the cached scale too.
+  void resetFitScale() { scale_ = 1.0; }
+
   void get_preferred_height_vfunc(int& minimum, int& natural) const override {
     Gtk::Label::get_preferred_height_vfunc(minimum, natural);
     limitToOneLine(minimum, natural);

@@ -27,6 +27,7 @@ Language::~Language() {
 void Language::updateFromIPC() {
   std::lock_guard<std::mutex> lock(mutex_);
   std::string layout = IPC::getInstance().getKeyboardLayout();
+  if (!layouts_.empty() && layouts_.front().full_name == layout) return;
 
   layouts_.clear();
   if (!layout.empty()) {
@@ -46,9 +47,9 @@ void Language::doUpdate() {
   }
   const auto& layout = layouts_[current_idx_];
 
-  if (!last_short_name_.empty()) label_.get_style_context()->remove_class(last_short_name_);
-  if (!layout.short_name.empty()) {
-    label_.get_style_context()->add_class(layout.short_name);
+  if (last_short_name_ != layout.short_name) {
+    if (!last_short_name_.empty()) label_.get_style_context()->remove_class(last_short_name_);
+    if (!layout.short_name.empty()) label_.get_style_context()->add_class(layout.short_name);
     last_short_name_ = layout.short_name;
   }
 
@@ -76,7 +77,7 @@ void Language::doUpdate() {
 
   if (!layoutName.empty()) {
     label_.show();
-    label_.set_markup(layoutName);
+    setLabelMarkup(layoutName);
   } else {
     label_.hide();
   }
