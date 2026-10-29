@@ -1146,8 +1146,10 @@ auto waybar::modules::Network::getInfo() -> void {
     // Proceeding here as get_scan might not be essential if we already have ifid_
   }
 
-  // If connected to an AP, try to get station data for bitrate
-  if (ifid_ > 0 && !bssid_.empty() && nl80211_id_ >= 0) {
+  // Bitrate is optional: skip the station request when the bar does not use it.
+  // Signal strength, SSID and frequency come from GET_SCAN above.
+  const bool query_bitrate = !config_["wifi-bitrate"].isBool() || config_["wifi-bitrate"].asBool();
+  if (query_bitrate && ifid_ > 0 && !bssid_.empty() && nl80211_id_ >= 0) {
     nl_msg = nlmsg_alloc();
     if (nl_msg == nullptr) {
       return;

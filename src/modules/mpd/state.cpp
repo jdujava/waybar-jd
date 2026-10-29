@@ -437,7 +437,10 @@ void Disconnected::disarm_timer() noexcept {
 
 void Disconnected::entry() noexcept {
   ctx_->emit();
-  arm_timer(1 /* second */);
+  // Try once after construction/mapping, without an artificial one-second
+  // delay. Failed attempts still use the normal reconnect interval.
+  last_interval_ = 0;
+  timer_connection_ = Glib::signal_idle().connect(sigc::mem_fun(*this, &Disconnected::on_timer));
 }
 
 void Disconnected::exit() noexcept { disarm_timer(); }
